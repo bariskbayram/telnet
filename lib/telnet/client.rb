@@ -6,19 +6,14 @@ require 'logger'
 module Telnet
   class Client
 
-    def initialize(args)
-      @options = Hash.new
+    def initialize(options)
+      @options = options
       @logger = Logger.new(STDOUT)
-      if args.size < 2
-        @logger.info "At least 2 arguments have to be given, hostname and port."
-        exit
-      end
-      @options["host"] = args[0]
-      @options["port"] = args[1]
-      @options["timeout"] = args[2]
-      if args[2].nil?
-        @options["timeout"] = "10"
-      end
+      @options["host"] = "localhost" if @options["host"].nil?
+      @options["port"] = 23 if @options["port"].nil?
+      @options["timeout"] = 10 if @options["timeout"].nil?
+      @options["waittime"] = 10 if @options["waittime"].nil?
+      @options["prompt"] = "~]$"
       @logger.info "Client started"
     end
 
@@ -28,40 +23,59 @@ module Telnet
           @socket = TCPSocket.open(@options["host"], @options["port"])
         end
       rescue Net::OpenTimeout
-        @logger.error "Time is up!"
-        exit
+        raise Net::OpenTimeout, "Time is up!"
       end
 
       @logger.info "Connected to #{@options["host"]}:#{@options["port"]}"
 
-      response = 0
-      while response != "200"
-        @logger.info "Enter valid credential for connection."
-        response = login
-      end
-      @logger.info "SUCCESS !"
+      login
 
       command = ""
       while command != "-1"
         command = get_user_command
-        @socket.puts(command)
-        @logger.info "Server said that => #{@socket.gets.chomp}"
+        response = waitfor_response command
+        print response.chomp
       end
       @logger.info "Connection is closed !"
     end
 
-    def login
-      print "Username: "
-      username = STDIN.gets.chomp
-      print "Password: "
-      password = STDIN.gets.chomp
+    def waitfor_response(command)
+      response = ""
+      line = ""
+      @socket.puts(command)
+      until line.include?(@options["prompt"])
+        unless @socket.wait_readable(2)
+          @logger.info "Time is up!"
+          exit
+        end
+        line = @socket.gets
+        response += line
+      end
+      response
+    end
 
-      @socket.puts("#{username},#{password}")
-      @socket.gets.chomp
+    def login
+      response = ""
+      until response.include? "200"
+        @logger.info "Enter valid credential for connection."
+        print "Username: "
+        username = get_user_command
+        print "Password: "
+        password = get_user_command
+
+        response = waitfor_response "#{username},#{password}"
+        if response.include?("403")
+          @logger.info "Connection is closed !"
+          exit
+        end
+      end
+
+      @logger.info "SUCCESS !"
+      @options["prompt"] = "#{username} ~]$ "
+      print @options["prompt"]
     end
 
     def get_user_command
-      print "Command: "
       STDIN.gets.chomp
     end
 
