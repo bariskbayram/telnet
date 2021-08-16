@@ -1,16 +1,19 @@
 require 'socket'
 require 'logger'
+require 'timeout'
 
 module Telnet
 
   class ActiveClient
 
-    attr_accessor :connection_status
-    attr_reader :socket
+    attr_accessor :is_alive, :socket
+    attr_reader :thread, :client_id
 
-    def initialize(socket)
+    def initialize(socket, thread)
+      @client_id = socket.fileno
       @socket = socket
-      @connection_status = :active_connection
+      @thread = thread
+      @is_alive = true
     end
 
   end
@@ -22,40 +25,89 @@ module Telnet
 
     def initialize(host="127.0.0.1", port)
       @tcp_server = TCPServer.new(host, port)
-      @clients = []
+      @clients = Hash.new
+      @mutex = Mutex.new
       @logger = Logger.new(STDOUT)
     end
 
+    def get_clients
+      @mutex.synchronize do
+        @clients
+      end
+    end
+
+    def synchronize(&block)
+      @mutex.synchronize do
+        block.call
+      end
+    end
+
     def serve
-      @logger.info "Server started on #{@tcp_server.local_address.ip_address}:#{@tcp_server.local_address.ip_port}"
+      @logger.info("Server started on #{@tcp_server.local_address.ip_address}:#{@tcp_server.local_address.ip_port}")
 
       loop do
-        Thread.new(@tcp_server.accept) do |socket|
-          client = ActiveClient::new(socket)
-          @clients << client
-          @logger.info "Request is accepted. - #{client.object_id}. Currently active sockets count: #{@clients.size}"
+        socket = @tcp_server.accept
 
-          check_authentication client.socket
+        puts @clients.inspect
 
-          request = get_data(client)
-          puts request
-          while request != "-1"
-            begin
-              response = %x(#{request})
-            rescue Errno::ENOENT
-              response = "#{request}: command not found...\n"
-            end
-            response += "#{USERNAME} ~]$ "
-            print response
-            send_data(client.socket, response)
+        session_client = check_session_alive(socket)
+        if not session_client.nil?
+          @logger.info("#{session_client.client_id} is resuming...")
+          session_client.thread.wakeup
+          session_client.socket = socket
+        else
+          Thread.new {
+            client = ActiveClient::new(socket, Thread.current)
+            synchronize { @clients[socket.fileno.to_s] = client }
+
+            @logger.info("Request is accepted. - #{client.client_id}. Currently active sockets count: #{get_clients.size}")
+
+            check_authentication client
 
             request = get_data(client)
             puts request
-          end
-          send_data(client.socket, "403 #{USERNAME} ~]$ ")
-          close_socket client
+
+            loop do
+              response = ""
+              begin
+                Timeout.timeout(30) do
+                  response = %x(#{request})
+                end
+              rescue Errno::ENOENT
+                response = "#{request}: command not found...\n"
+              rescue Timeout::Error
+                response = "Time is up!\n"
+              end
+              response += "#{USERNAME} ~]$ "
+              print response
+              send_data(client.socket, response)
+
+              request = get_data(client)
+              puts request
+            end
+
+            send_data(client.socket, "403 #{USERNAME} ~]$ ")
+            close_socket(client)
+          }
         end
       end
+    end
+
+    def check_session_alive(socket)
+      data = get_data(ActiveClient.new(socket, Thread.current))
+      response = "SESSION_CREATE"
+      all_clients = get_clients
+
+      if data.include?("SRESUME") && all_clients.size > 0
+        client_no = data.split(",")[0]
+        if all_clients[client_no] && !all_clients[client_no].is_alive
+          client = all_clients[data.split(",")[0]]
+          client.is_alive = true
+          response = "SESSION_RESUME"
+        end
+      end
+      send_data(socket, "#{response} #{USERNAME} ~]$ ")
+      client
     end
 
     def check_authentication(client)
@@ -65,25 +117,38 @@ module Telnet
       while username != USERNAME || password != PASSWORD
         if login_count == 0
           send_data(client.socket, "403 #{USERNAME} ~]$ ")
-          @logger.info "Username or password error"
-          close_socket client
+          @logger.info("Authentication failed for 3 times.")
+          close_socket(client)
         end
-        @logger.info "Username or password error"
+        @logger.info("Authentication failed.")
         send_data(client.socket, "401 #{USERNAME} ~]$ ")
         username, password = get_data(client).split(",")
         login_count -= 1
       end
 
-      @logger.info "Successfully authenticated for #{client.object_id}."
+      @logger.info("Successfully authenticated for #{client.client_id}.")
       send_data(client.socket, "200 #{USERNAME} ~]$ ")
-      print "#{USERNAME} ~]$ "
+      print("#{USERNAME} ~]$ ")
     end
 
     def get_data(client)
       begin
-        client.socket.gets.chomp
+        unless client.socket.wait_readable(30)
+          @logger.info("Time is up!")
+          close_socket(client)
+        end
+        data = client.socket.gets.chomp
+        if data.include?("SSTOP")
+          @logger.info("#{client.client_id} is stopped.")
+          client.is_alive = false
+          Thread.stop
+          data = "echo -n"
+        elsif data.include?("SKILL")
+          close_socket(client)
+        end
+        data
       rescue NoMethodError
-        close_socket client
+        close_socket(client)
       end
     end
 
@@ -94,9 +159,9 @@ module Telnet
     end
 
     def close_socket(client)
+      synchronize { @clients.delete(client.client_id.to_s) }
+      @logger.info("#{client.client_id} is closed.")
       client.socket.close
-      @clients.delete(client.socket)
-      @logger.info "#{client.object_id} is closed."
       Thread.current.kill
     end
 

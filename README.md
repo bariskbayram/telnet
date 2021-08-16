@@ -1,6 +1,6 @@
 # Telnet
 
-??
+Simple Telnet Client-Server functionality with Ruby.
 
 ## Installation
 
@@ -20,7 +20,21 @@ Or install it yourself as:
 
 ## Usage
 
-??
+Server side:
+
+    $ruby start_server.rb
+
+Client side:
+
+    $ruby start_client  <host>  <port> <timeout> <waittime>
+    $ruby start_client 127.0.0.1 4242
+    $ruby start_client 127.0.0.1 4242 10 10
+    $ruby start_client  <host>  <port>
+
+You can use ctrl+z for suspending the session, use below options for connecting to the session again:
+
+    $ruby start_client -r <id> <host> <port>
+    $ruby start_client -r 7 127.0.0.1 4242
 
 ## Development
 

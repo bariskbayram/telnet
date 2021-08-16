@@ -2,10 +2,17 @@ require './lib/telnet/client'
 
 options = Hash.new
 
-options["host"] = ARGV[0]
-options["port"] = ARGV[1]
-options["timeout"] = Integer(ARGV[2]) unless ARGV[2].nil?
-options["waittime"] = Integer(ARGV[3]) unless ARGV[3].nil?
+iterate = 0
+if ARGV[0].include? "-r"
+  options["resume"] = true
+  options["resume_id"] = ARGV[1]
+  iterate = 2
+end
+
+options["host"] = ARGV[iterate]
+options["port"] = ARGV[iterate + 1]
+options["timeout"] = Integer(ARGV[iterate + 2]) unless ARGV[iterate + 2].nil?
+options["waittime"] = Integer(ARGV[iterate + 3]) unless ARGV[iterate + 3].nil?
 
 client = Telnet::Client.new(options)
 client.start
