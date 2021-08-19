@@ -1,11 +1,11 @@
-require 'socket'
-require 'logger'
-require 'timeout'
+# frozen_string_literal: true
+
+require "socket"
+require "logger"
+require "timeout"
 
 module Telnet
-
   class ActiveClient
-
     attr_accessor :is_alive, :socket
     attr_reader :thread, :client_id
 
@@ -15,19 +15,17 @@ module Telnet
       @thread = thread
       @is_alive = true
     end
-
   end
 
   class Server
-
     USERNAME = "admin"
     PASSWORD = "password"
 
-    def initialize(host="127.0.0.1", port)
+    def initialize(host = "127.0.0.1", port = "4242")
       @tcp_server = TCPServer.new(host, port)
-      @clients = Hash.new
+      @clients = {}
       @mutex = Mutex.new
-      @logger = Logger.new(STDOUT)
+      @logger = Logger.new($stdout)
     end
 
     def get_clients
@@ -51,13 +49,9 @@ module Telnet
         puts @clients.inspect
 
         session_client = check_session_alive(socket)
-        if not session_client.nil?
-          @logger.info("#{session_client.client_id} is resuming...")
-          session_client.thread.wakeup
-          session_client.socket = socket
-        else
-          Thread.new {
-            client = ActiveClient::new(socket, Thread.current)
+        if session_client.nil?
+          Thread.new do
+            client = ActiveClient.new(socket, Thread.current)
             synchronize { @clients[socket.fileno.to_s] = client }
 
             @logger.info("Request is accepted. - #{client.client_id}. Currently active sockets count: #{get_clients.size}")
@@ -71,7 +65,7 @@ module Telnet
               response = ""
               begin
                 Timeout.timeout(30) do
-                  response = %x(#{request})
+                  response = `#{request}`
                 end
               rescue Errno::ENOENT
                 response = "#{request}: command not found...\n"
@@ -88,7 +82,11 @@ module Telnet
 
             send_data(client.socket, "403 #{USERNAME} ~]$ ")
             close_socket(client)
-          }
+          end
+        else
+          @logger.info("#{session_client.client_id} is resuming...")
+          session_client.thread.wakeup
+          session_client.socket = socket
         end
       end
     end
@@ -98,7 +96,7 @@ module Telnet
       response = "SESSION_CREATE"
       all_clients = get_clients
 
-      if data.include?("SRESUME") && all_clients.size > 0
+      if data.include?("SRESUME") && all_clients.size.positive?
         client_no = data.split(",")[0]
         if all_clients[client_no] && !all_clients[client_no].is_alive
           client = all_clients[data.split(",")[0]]
@@ -115,7 +113,7 @@ module Telnet
       login_count = 2
 
       while username != USERNAME || password != PASSWORD
-        if login_count == 0
+        if login_count.zero?
           send_data(client.socket, "403 #{USERNAME} ~]$ ")
           @logger.info("Authentication failed for 3 times.")
           close_socket(client)
@@ -132,30 +130,26 @@ module Telnet
     end
 
     def get_data(client)
-      begin
-        unless client.socket.wait_readable(30)
-          @logger.info("Time is up!")
-          close_socket(client)
-        end
-        data = client.socket.gets.chomp
-        if data.include?("SSTOP")
-          @logger.info("#{client.client_id} is stopped.")
-          client.is_alive = false
-          Thread.stop
-          data = "echo -n"
-        elsif data.include?("SKILL")
-          close_socket(client)
-        end
-        data
-      rescue NoMethodError
+      unless client.socket.wait_readable(30)
+        @logger.info("Time is up!")
         close_socket(client)
       end
+      data = client.socket.gets.chomp
+      if data.include?("SSTOP")
+        @logger.info("#{client.client_id} is stopped.")
+        client.is_alive = false
+        Thread.stop
+        data = "echo -n"
+      elsif data.include?("SKILL")
+        close_socket(client)
+      end
+      data
+    rescue NoMethodError
+      close_socket(client)
     end
 
     def send_data(socket, message)
-      unless socket.closed?
-        socket.puts(message)
-      end
+      socket.puts(message) unless socket.closed?
     end
 
     def close_socket(client)
@@ -164,6 +158,5 @@ module Telnet
       client.socket.close
       Thread.current.kill
     end
-
   end
 end

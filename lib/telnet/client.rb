@@ -1,14 +1,15 @@
-require 'socket'
-require 'timeout'
-require 'net/protocol'
-require 'logger'
+# frozen_string_literal: true
+
+require "socket"
+require "timeout"
+require "net/protocol"
+require "logger"
 
 module Telnet
   class Client
-
     def initialize(options)
       @options = options
-      @logger = Logger.new(STDOUT)
+      @logger = Logger.new($stdout)
       @options["host"] = "localhost" if @options["host"].nil?
       @options["port"] = 23 if @options["port"].nil?
       @options["timeout"] = 10 if @options["timeout"].nil?
@@ -18,7 +19,6 @@ module Telnet
       trap("INT", proc { close_client })
       trap("TSTP", proc { send_suspend_command })
       trap("SIGCONT", proc { send_resume_command })
-
     end
 
     def start
@@ -92,13 +92,13 @@ module Telnet
     end
 
     def get_user_command
-      STDIN.gets.chomp
+      $stdin.gets.chomp
     end
 
     def send_suspend_command
       @socket.puts("SSTOP")
       puts("\nSuspending...")
-      `kill -STOP #{$$}`
+      `kill -STOP #{$PID}`
     end
 
     def send_resume_command
@@ -111,6 +111,5 @@ module Telnet
       puts("\nTerminating...")
       exit
     end
-
   end
 end

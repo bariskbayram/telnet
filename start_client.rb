@@ -1,6 +1,8 @@
-require './lib/telnet/client'
+# frozen_string_literal: true
 
-options = Hash.new
+require "./lib/telnet/client"
+
+options = {}
 
 iterate = 0
 if ARGV[0].include? "-r"
