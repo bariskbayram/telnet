@@ -2,12 +2,14 @@ PATH
   remote: .
   specs:
     telnet (0.1.0)
+      open3
 
 GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.2)
     minitest (5.14.4)
+    open3 (0.1.0)
     parallel (1.20.1)
     parser (3.0.2.0)
       ast (~> 2.4.1)
@@ -26,6 +28,9 @@ GEM
       unicode-display_width (>= 1.4.0, < 3.0)
     rubocop-ast (1.8.0)
       parser (>= 3.0.1.1)
+    rubocop-performance (1.11.5)
+      rubocop (>= 1.7.0, < 2.0)
+      rubocop-ast (>= 0.4.0)
     ruby-progressbar (1.11.0)
     unicode-display_width (2.0.0)
 
@@ -37,6 +42,7 @@ DEPENDENCIES
   minitest (~> 5.0)
   rake (~> 13.0)
   rubocop (~> 1.7)
+  rubocop-performance
   telnet!
 
 BUNDLED WITH

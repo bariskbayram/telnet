@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-require "./lib/telnet/server"
+require './lib/telnet/server'
+require './lib/telnet/argument_parser'
 
-s = Telnet::Server.new("127.0.0.1", "4242")
-s.serve
+options = Telnet::ArgumentParser.server_parse
+
+server = Telnet::Server.new(options)
+server.serve

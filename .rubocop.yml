@@ -4,22 +4,37 @@ inherit_mode:
 AllCops:
   TargetRubyVersion: 2.7.4
   NewCops: enable
+  SuggestExtensions: false
   Exclude:
     - 'telnet.gemspec'
 
 Style/StringLiterals:
   Enabled: true
-  EnforcedStyle: double_quotes
+  EnforcedStyle: single_quotes
 
 Style/StringLiteralsInInterpolation:
   Enabled: true
-  EnforcedStyle: double_quotes
+  EnforcedStyle: single_quotes
 
-Layout/LineLength:
-  Max: 80
-
-Metrics/AbcSize:
+Style/ClassVars:
   Enabled: false
 
 Style/Documentation:
   Enabled: false
+
+Layout/LineLength:
+  Max: 120
+
+Metrics/AbcSize:
+  Enabled: false
+
+Metrics/ClassLength:
+  Max: 150
+
+Metrics/MethodLength:
+  Max: 20
+  Exclude:
+    - './lib/telnet/argument_parser.rb'
+
+require:
+  - rubocop-performance

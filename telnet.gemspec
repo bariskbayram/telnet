@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "lib/telnet/version"
+require_relative 'lib/telnet/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "telnet"
@@ -23,9 +23,11 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  # Uncomment to register a new dependency of your gem
-  # spec.add_dependency "example-gem", "~> 1.0"
+  spec.add_development_dependency "minitest", "~> 5.0"
+  spec.add_development_dependency "rake", "~> 13.0"
+  spec.add_development_dependency "rubocop", "~> 1.7"
+  spec.add_development_dependency "rubocop-performance"
 
-  # For more information and examples about making a new gem, checkout our
-  # guide at: https://bundler.io/guides/creating_gem.html
+  spec.add_runtime_dependency "open3"
+
 end
