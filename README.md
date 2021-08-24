@@ -22,19 +22,35 @@ Or install it yourself as:
 
 Server side:
 
-    $ruby start_server.rb
+    $ ruby start_server.rb
+
+    $ ruby start_server.rb -h
+
+    Options:
+        -i HOST                          ip address (127.0.0.1)
+        -p PORT                          port number (4242)
+        -t TIMEOUT                       time to wait for executing command (5)
+
 
 Client side:
 
-    $ruby start_client  <host>  <port> <timeout> <waittime>
-    $ruby start_client 127.0.0.1 4242
-    $ruby start_client 127.0.0.1 4242 10 10
-    $ruby start_client  <host>  <port>
+    $ ruby start_client.rb               start client with default options
 
-You can use ctrl+z for suspending the session, use below options for connecting to the session again:
+    $ ruby start_client.rb -h            help
 
-    $ruby start_client -r <id> <host> <port>
-    $ruby start_client -r 7 127.0.0.1 4242
+    Options:
+        -i HOST                          ip address (127.0.0.1)
+        -p PORT                          port number (4242)
+        -r SESSION_ID                    reattach to a detached session
+        -l                               get list of active sessions
+        -t TIMEOUT                       time to wait for connection (30)
+        -w WAIT_TIME                     time to wait for response (30)
+
+
+
+You can use ctrl-z to detach the connection from the session, use below options for attach to the session again:
+
+        $ ruby start_client.rb -r 1          attach to the session that is specified with ID
 
 ## Development
 

@@ -1,162 +1,186 @@
 # frozen_string_literal: true
 
-require "socket"
-require "logger"
-require "timeout"
+require 'socket'
+require 'logger'
+require 'timeout'
+require 'open3'
+
+require_relative 'connection'
+require_relative 'session'
 
 module Telnet
-  class ActiveClient
-    attr_accessor :is_alive, :socket
-    attr_reader :thread, :client_id
-
-    def initialize(socket, thread)
-      @client_id = socket.fileno
-      @socket = socket
-      @thread = thread
-      @is_alive = true
-    end
-  end
-
   class Server
-    USERNAME = "admin"
-    PASSWORD = "password"
+    USERNAME = 'admin'
+    PASSWORD = 'password'
 
-    def initialize(host = "127.0.0.1", port = "4242")
-      @tcp_server = TCPServer.new(host, port)
-      @clients = {}
+    def initialize(options)
+      @options = options
+      @tcp_server = TCPServer.new(options[:host], options[:port])
+      @sessions = {}
       @mutex = Mutex.new
       @logger = Logger.new($stdout)
+
+      trap('INT', proc { close_server })
     end
 
-    def get_clients
+    def all_sessions
       @mutex.synchronize do
-        @clients
+        @sessions
       end
     end
 
     def synchronize(&block)
-      @mutex.synchronize do
-        block.call
-      end
+      @mutex.synchronize(&block)
     end
 
     def serve
       @logger.info("Server started on #{@tcp_server.local_address.ip_address}:#{@tcp_server.local_address.ip_port}")
 
       loop do
-        socket = @tcp_server.accept
+        Thread.new(@tcp_server.accept) do |socket|
+          connection = Telnet::Connection.new(socket, Thread.current)
+          session = check_session_status(connection)
 
-        puts @clients.inspect
-
-        session_client = check_session_alive(socket)
-        if session_client.nil?
-          Thread.new do
-            client = ActiveClient.new(socket, Thread.current)
-            synchronize { @clients[socket.fileno.to_s] = client }
-
-            @logger.info("Request is accepted. - #{client.client_id}. Currently active sockets count: #{get_clients.size}")
-
-            check_authentication client
-
-            request = get_data(client)
-            puts request
-
-            loop do
-              response = ""
-              begin
-                Timeout.timeout(30) do
-                  response = `#{request}`
-                end
-              rescue Errno::ENOENT
-                response = "#{request}: command not found...\n"
-              rescue Timeout::Error
-                response = "Time is up!\n"
-              end
-              response += "#{USERNAME} ~]$ "
-              print response
-              send_data(client.socket, response)
-
-              request = get_data(client)
-              puts request
-            end
-
-            send_data(client.socket, "403 #{USERNAME} ~]$ ")
-            close_socket(client)
+          if session.nil?
+            check_authentication(connection)
+            session = Telnet::Session.new
+            synchronize { @sessions[session.session_id] = session }
           end
-        else
-          @logger.info("#{session_client.client_id} is resuming...")
-          session_client.thread.wakeup
-          session_client.socket = socket
+          session.register_connection(connection)
+          listen_command(session, connection)
         end
       end
     end
 
-    def check_session_alive(socket)
-      data = get_data(ActiveClient.new(socket, Thread.current))
-      response = "SESSION_CREATE"
-      all_clients = get_clients
+    def check_session_status(connection)
+      data = read_data_from_connection(connection)
+      response = 'SESSION_CREATE'
+      sessions = all_sessions
 
-      if data.include?("SRESUME") && all_clients.size.positive?
-        client_no = data.split(",")[0]
-        if all_clients[client_no] && !all_clients[client_no].is_alive
-          client = all_clients[data.split(",")[0]]
-          client.is_alive = true
-          response = "SESSION_RESUME"
-        end
+      if data.include?('SESSION_LIST')
+        send_session_list(sessions, connection)
+      elsif data.include?('SESSION_ATTACH') && sessions.size.positive?
+        session_id = Integer(data.split(',')[0])
+        response = 'SESSION_RESUME' if sessions[session_id]
+        synchronize { sessions[session_id].is_alive = true if sessions[session_id] }
       end
-      send_data(socket, "#{response} #{USERNAME} ~]$ ")
-      client
+      send_data_to_connection(connection, "#{response} #{USERNAME} ~]$ ")
+      sessions[session_id]
     end
 
-    def check_authentication(client)
-      username, password = get_data(client).split(",")
+    def send_session_list(sessions, connection)
+      response = ''
+      sessions.each do |s|
+        status = sessions[s[0]].is_alive ? 'ATTACHED' : 'DETACHED'
+        response += "#{s[0]} - #{status}\n"
+      end
+
+      send_data_to_connection(connection, "#{response}, #{USERNAME} ~]$ ")
+      reject_connection(connection)
+    end
+
+    def check_authentication(connection)
+      username, password = read_data_from_connection(connection).split(',')
       login_count = 2
 
       while username != USERNAME || password != PASSWORD
         if login_count.zero?
-          send_data(client.socket, "403 #{USERNAME} ~]$ ")
-          @logger.info("Authentication failed for 3 times.")
-          close_socket(client)
+          send_data_to_connection(connection, "403 #{USERNAME} ~]$ ")
+          reject_connection(connection)
         end
-        @logger.info("Authentication failed.")
-        send_data(client.socket, "401 #{USERNAME} ~]$ ")
-        username, password = get_data(client).split(",")
+        send_data_to_connection(connection, "401 #{USERNAME} ~]$ ")
+        username, password = read_data_from_connection(connection).split(',')
         login_count -= 1
       end
 
-      @logger.info("Successfully authenticated for #{client.client_id}.")
-      send_data(client.socket, "200 #{USERNAME} ~]$ ")
-      print("#{USERNAME} ~]$ ")
+      send_data_to_connection(connection, "200 #{USERNAME} ~]$ ")
     end
 
-    def get_data(client)
-      unless client.socket.wait_readable(30)
-        @logger.info("Time is up!")
-        close_socket(client)
+    def listen_command(session, connection)
+      request = read_data(session, connection)
+
+      loop do
+        begin
+          Timeout.timeout(@options[:timeout]) do
+            stdin, stdout = Open3.popen3(request)
+            stdout.each_line do |line|
+              send_data_to_all(session, line)
+            end
+            send_data_to_all(session, "#{USERNAME} ~]$ ")
+            stdin.close
+          end
+        rescue Timeout::Error
+          send_data_to_all(session, "#{USERNAME} ~]$ ")
+        rescue Errno::ENOENT
+          send_data_to_all(session, "#{request} command not found...\n#{USERNAME} ~]$ ")
+        end
+
+        request = read_data(session, connection)
       end
-      data = client.socket.gets.chomp
-      if data.include?("SSTOP")
-        @logger.info("#{client.client_id} is stopped.")
-        client.is_alive = false
-        Thread.stop
-        data = "echo -n"
-      elsif data.include?("SKILL")
-        close_socket(client)
+    end
+
+    def read_data(session, connection)
+      data = read_data_from_connection(connection)
+      if data.include?('SSTOP')
+        @logger.info("Connection #{connection.connection_id} is stopped.")
+        close_connection(session, connection)
+      elsif data.include?('SKILL')
+        close_session(session)
+        Thread.current.kill
       end
       data
-    rescue NoMethodError
-      close_socket(client)
     end
 
-    def send_data(socket, message)
-      socket.puts(message) unless socket.closed?
+    def read_data_from_connection(connection)
+      connection.socket.gets.chomp
+    rescue IOError, NoMethodError
+      ''
     end
 
-    def close_socket(client)
-      synchronize { @clients.delete(client.client_id.to_s) }
-      @logger.info("#{client.client_id} is closed.")
-      client.socket.close
-      Thread.current.kill
+    def send_data_to_connection(connection, message)
+      connection.socket.puts(message) unless connection.socket.closed?
+    end
+
+    def send_data_to_all(session, message)
+      session.connections.each do |connection|
+        send_data_to_connection(connection, message)
+      end
+    end
+
+    def reject_connection(connection)
+      connection.socket.close
+      connection.thread.kill
+    end
+
+    def close_connection(session, connection)
+      synchronize do
+        session.connections.delete_if { |c| c.connection_id == connection.connection_id }
+        session.is_alive = false if session.connections.size.zero?
+      end
+      reject_connection(connection)
+    end
+
+    def close_session(session)
+      session.connections.each do |connection|
+        connection.socket.puts("CLOSE_X #{USERNAME} ~]$ ") unless connection.thread.eql?(Thread.current)
+        connection.socket.close
+        connection.thread.kill unless connection.thread.eql?(Thread.current)
+      end
+      synchronize { @sessions.delete(session.session_id) }
+      @logger.info("Session #{session.session_id} is closed.")
+    end
+
+    def close_server
+      Thread.new do
+        sessions = all_sessions
+        if sessions.size.positive?
+          sessions.each_value do |session|
+            close_session(session)
+          end
+        end
+      end.join
+      sleep(5)
+      exit
     end
   end
 end
