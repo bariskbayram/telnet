@@ -2,7 +2,7 @@
 
 require 'optparse'
 
-module Telnet
+module TelnetServerClient
   class ArgumentParser
     def self.client_parse
       client_options = {

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Telnet
+module TelnetServerClient
   class Connection
     attr_reader :connection_id, :socket, :thread
 

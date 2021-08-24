@@ -7,7 +7,7 @@ Simple Telnet Client-Server functionality with Ruby.
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'telnet'
+gem 'telnet_server_client'
 ```
 
 And then execute:

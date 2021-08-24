@@ -3,8 +3,8 @@
 require_relative 'lib/telnet/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "telnet-server-client"
-  spec.version       = Telnet::VERSION
+  spec.name          = "telnet_server_client"
+  spec.version       = TelnetServerClient::VERSION
   spec.authors       = ["bariskbayram"]
   spec.email         = ["bariskaanb@gmail.com"]
 

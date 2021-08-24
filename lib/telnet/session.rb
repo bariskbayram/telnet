@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Telnet
+module TelnetServerClient
   class Session
     @@session_index = 0
 

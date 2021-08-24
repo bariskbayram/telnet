@@ -8,7 +8,7 @@ require 'open3'
 require_relative 'connection'
 require_relative 'session'
 
-module Telnet
+module TelnetServerClient
   class Server
     USERNAME = 'admin'
     PASSWORD = 'password'
@@ -38,12 +38,12 @@ module Telnet
 
       loop do
         Thread.new(@tcp_server.accept) do |socket|
-          connection = Telnet::Connection.new(socket, Thread.current)
+          connection = TelnetServerClient::Connection.new(socket, Thread.current)
           session = check_session_status(connection)
 
           if session.nil?
             check_authentication(connection)
-            session = Telnet::Session.new
+            session = TelnetServerClient::Session.new
             synchronize { @sessions[session.session_id] = session }
           end
           session.register_connection(connection)

@@ -5,7 +5,7 @@ require 'timeout'
 require 'net/protocol'
 require 'logger'
 
-module Telnet
+module TelnetServerClient
   class Client
     def initialize(options)
       @options = options
