@@ -102,7 +102,7 @@ module Telnet
       loop do
         begin
           Timeout.timeout(@options[:timeout]) do
-            stdin, stdout, stderr, wait_thr = Open3.popen3(request)
+            stdin, stdout = Open3.popen3(request)
             stdout.each_line do |line|
               send_data_to_all(session, line)
             end
