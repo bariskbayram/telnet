@@ -8,8 +8,8 @@ module Telnet
       client_options = {
         host: '127.0.0.1',
         port: '4242',
-        timeout: 99,
-        wait_time: 99,
+        timeout: 30,
+        wait_time: 30,
         prompt: '~]$ '
       }
       OptionParser.new do |opts|
@@ -27,10 +27,10 @@ module Telnet
         opts.on('-l', 'get list of active sessions') do
           client_options[:active_sessions] = true
         end
-        opts.on('-t TIMEOUT', Integer, 'time to wait for response (10)') do |timeout|
+        opts.on('-t TIMEOUT', Integer, 'time to wait for connection (30)') do |timeout|
           client_options[:timeout] = timeout
         end
-        opts.on('-w WAIT_TIME', Integer, 'time to wait for response (10)') do |wait_time|
+        opts.on('-w WAIT_TIME', Integer, 'time to wait for response (30)') do |wait_time|
           client_options[:wait_time] = wait_time
         end
       end.parse!
@@ -40,7 +40,8 @@ module Telnet
     def self.server_parse
       server_options = {
         host: '127.0.0.1',
-        port: '4242'
+        port: '4242',
+        timeout: 5
       }
       OptionParser.new do |opts|
         opts.banner = 'Usage: ruby start_server.rb [options]'
@@ -50,6 +51,9 @@ module Telnet
         end
         opts.on('-p PORT', 'port number (4242)') do |port|
           server_options[:port] = port
+        end
+        opts.on('-t TIMEOUT', Integer, 'time to wait for executing command (5)') do |timeout|
+          server_options[:timeout] = timeout
         end
       end.parse!
       server_options

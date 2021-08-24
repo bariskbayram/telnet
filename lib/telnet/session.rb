@@ -12,10 +12,13 @@ module Telnet
       @@session_index += 1
       @connections = []
       @is_alive = true
+      @mutex = Mutex.new
     end
 
     def register_connection(connection)
-      @connections << connection
+      @mutex.synchronize do
+        @connections << connection
+      end
     end
   end
 end

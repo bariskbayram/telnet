@@ -27,7 +27,4 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rubocop", "~> 1.7"
   spec.add_development_dependency "rubocop-performance"
-
-  spec.add_runtime_dependency "open3"
-
 end

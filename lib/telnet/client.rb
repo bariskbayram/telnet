@@ -25,6 +25,7 @@ module Telnet
       end
 
       response = check_session_status
+      print @options[:prompt] unless response.include?('SESSION_CREATE')
       login if response.include?('SESSION_CREATE')
 
       waitfor_broadcast_messages
@@ -71,18 +72,16 @@ module Telnet
     def waitfor_broadcast_messages
       Thread.new do
         loop do
-          response = ''
           line = ''
           until line.include?(@options[:prompt])
-            unless @socket.wait_readable(@options[:wait_time])
-              @logger.info('Time is up!')
-              exit
-            end
             line = @socket.gets
-            response += line
+            if line.include?(@options[:prompt])
+              print line.chomp unless line.include?('CLOSE_X')
+            else
+              print line
+            end
           end
-          exit if response.include?('CLOSE_X')
-          print response.chomp
+          exit if line.include?('CLOSE_X')
         end
       end
     end

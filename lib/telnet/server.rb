@@ -3,6 +3,7 @@
 require 'socket'
 require 'logger'
 require 'timeout'
+require 'open3'
 
 require_relative 'connection'
 require_relative 'session'
@@ -61,7 +62,7 @@ module Telnet
       elsif data.include?('SESSION_ATTACH') && sessions.size.positive?
         session_id = Integer(data.split(',')[0])
         response = 'SESSION_RESUME' if sessions[session_id]
-        sessions[session_id].is_alive = true if sessions[session_id]
+        synchronize { sessions[session_id].is_alive = true if sessions[session_id] }
       end
       send_data_to_connection(connection, "#{response} #{USERNAME} ~]$ ")
       sessions[session_id]
@@ -99,28 +100,26 @@ module Telnet
       request = read_data(session, connection)
 
       loop do
-        response = ''
         begin
-          Timeout.timeout(2) do
-            response = `#{request}`
+          Timeout.timeout(@options[:timeout]) do
+            stdin, stdout, stderr, wait_thr = Open3.popen3(request)
+            stdout.each_line do |line|
+              send_data_to_all(session, line)
+            end
+            send_data_to_all(session, "#{USERNAME} ~]$ ")
+            stdin.close
           end
-        rescue Errno::ENOENT
-          response = "#{request}: command not found...\n"
         rescue Timeout::Error
-          response = "Time is up!\n"
+          send_data_to_all(session, "#{USERNAME} ~]$ ")
+        rescue Errno::ENOENT
+          send_data_to_all(session, "#{request} command not found...\n#{USERNAME} ~]$ ")
         end
-        response += "#{USERNAME} ~]$ "
-        send_data_to_all(session, response)
 
         request = read_data(session, connection)
       end
     end
 
     def read_data(session, connection)
-      unless connection.socket.wait_readable(9999)
-        @logger.info('Time is up!')
-        close_connection(session, connection)
-      end
       data = read_data_from_connection(connection)
       if data.include?('SSTOP')
         @logger.info("Connection #{connection.connection_id} is stopped.")
@@ -134,8 +133,8 @@ module Telnet
 
     def read_data_from_connection(connection)
       connection.socket.gets.chomp
-    rescue IOError
-      @logger.error('Error occurred.')
+    rescue IOError, NoMethodError
+      ''
     end
 
     def send_data_to_connection(connection, message)
@@ -154,8 +153,10 @@ module Telnet
     end
 
     def close_connection(session, connection)
-      session.connections.delete_if { |c| c.connection_id == connection.connection_id }
-      session.is_alive = false if session.connections.size.zero?
+      synchronize do
+        session.connections.delete_if { |c| c.connection_id == connection.connection_id }
+        session.is_alive = false if session.connections.size.zero?
+      end
       reject_connection(connection)
     end
 
