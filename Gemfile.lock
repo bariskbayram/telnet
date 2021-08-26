@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    telnet_server_client (0.1.0)
+    telnet_server_client (0.1.1)
 
 GEM
   remote: https://rubygems.org/
@@ -40,7 +40,7 @@ DEPENDENCIES
   minitest (~> 5.0)
   rake (~> 13.0)
   rubocop (~> 1.7)
-  rubocop-performance
+  rubocop-performance (~> 1.11.5)
   telnet_server_client!
 
 BUNDLED WITH

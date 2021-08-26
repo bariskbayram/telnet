@@ -8,7 +8,7 @@ Gem::Specification.new do |spec|
   spec.authors       = ["bariskbayram"]
   spec.email         = ["bariskaanb@gmail.com"]
 
-  spec.summary       = "Simple telnet client and server functionality project"
+  spec.summary       = "Telnet client and server"
   spec.description   = "Simple telnet client and server functionality project"
   spec.homepage      = "https://github.com/bariskbayram/telnet"
   spec.license       = "MIT"
@@ -26,5 +26,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "minitest", "~> 5.0"
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rubocop", "~> 1.7"
-  spec.add_development_dependency "rubocop-performance"
+  spec.add_development_dependency "rubocop-performance", "~> 1.11.5"
 end
