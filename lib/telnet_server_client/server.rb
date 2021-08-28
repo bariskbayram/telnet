@@ -42,11 +42,10 @@ class Server
 
         if session.nil?
           check_authentication(connection)
-          session = Session.new
-          synchronize { @sessions[session.session_id] = session }
+          session = create_session
         end
         session.register_connection(connection)
-        listen_command(session, connection)
+        execute_command_with_loop(session, connection)
       end
     end
   end
@@ -95,27 +94,44 @@ class Server
     send_data_to_connection(connection, "200 #{USERNAME} ~]$ ")
   end
 
-  def listen_command(session, connection)
+  def create_session
+    session = Session.new
+    synchronize { @sessions[session.session_id] = session }
+    session
+  end
+
+  def execute_command_with_loop(session, connection)
     request = read_data(session, connection)
 
     loop do
-      begin
-        Timeout.timeout(@options[:timeout]) do
-          stdin, stdout = Open3.popen3(request)
-          stdout.each_line do |line|
-            send_data_to_all(session, line)
-          end
-          send_data_to_all(session, "#{USERNAME} ~]$ ")
-          stdin.close
-        end
-      rescue Timeout::Error
-        send_data_to_all(session, "#{USERNAME} ~]$ ")
-      rescue Errno::ENOENT
-        send_data_to_all(session, "#{request} command not found...\n#{USERNAME} ~]$ ")
-      end
-
+      send_all_command_result(session, request)
       request = read_data(session, connection)
     end
+  end
+
+  def send_all_command_result(session, request)
+    execute_command(request) do |result|
+      send_data_to_all(session, result)
+    end
+  end
+
+  def send_command_result(connection, request)
+    execute_command(request) do |result|
+      send_data_to_connection(connection, result)
+    end
+  end
+
+  def execute_command(request)
+    Timeout.timeout(@options[:timeout]) do
+      stdin, stdout = Open3.popen3(request)
+      stdout.each_line { |line| yield line }
+      yield "#{USERNAME} ~]$ "
+      stdin.close
+    end
+  rescue Timeout::Error
+    yield "#{USERNAME} ~]$ "
+  rescue Errno::ENOENT
+    yield "#{request} command not found...\n#{USERNAME} ~]$ "
   end
 
   def read_data(session, connection)

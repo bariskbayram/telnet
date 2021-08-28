@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-require_relative 'telnet/version'
-require_relative  'telnet/server'
-require_relative  'telnet/client'
-require_relative 'telnet/argument_parser'
+require_relative 'telnet_server_client/version'
+require_relative 'telnet_server_client/server'
+require_relative 'telnet_server_client/client'
+require_relative 'telnet_server_client/session'
+require_relative 'telnet_server_client/connection'
 
 class TelnetServer
   class << self

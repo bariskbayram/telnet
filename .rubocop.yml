@@ -22,6 +22,9 @@ Style/ClassVars:
 Style/Documentation:
   Enabled: false
 
+Style/ExplicitBlockArgument:
+  Enabled: false
+
 Layout/LineLength:
   Max: 120
 
@@ -34,7 +37,7 @@ Metrics/ClassLength:
 Metrics/MethodLength:
   Max: 20
   Exclude:
-    - './lib/telnet/argument_parser.rb'
+    - './lib/telnet_server_client/argument_parser.rb'
 
 require:
   - rubocop-performance

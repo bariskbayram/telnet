@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'lib/telnet/version'
+require_relative 'lib/telnet_server_client/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "telnet_server_client"
