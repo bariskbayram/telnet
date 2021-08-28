@@ -2,6 +2,7 @@
 
 require_relative 'telnet_server_client/version'
 require_relative 'telnet_server_client/server'
+require_relative 'telnet_server_client/server_base'
 require_relative 'telnet_server_client/client'
 require_relative 'telnet_server_client/session'
 require_relative 'telnet_server_client/connection'
